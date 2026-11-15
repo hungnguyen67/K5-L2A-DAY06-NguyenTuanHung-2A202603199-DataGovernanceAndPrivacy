@@ -39,14 +39,14 @@
 ## 03 · Research & design
 
 - 2–3 references (URL + ngày xem) và **vì sao** chọn kỹ thuật: (1) ACDC (Sakaridis et al.) cung cấp bối cảnh về khó khăn của ảnh lái xe trong điều kiện bất lợi; dùng để biện minh việc xem xét slice night/adverse conditions, không dùng ACDC làm input. (2) ISO/IEC TR 5259-6:2026 mô tả visualization framework cho data quality; liên quan cách trình bày bằng chứng review, không phải chứng nhận tuân thủ hay bằng chứng metric của PoC. Metadata được xác nhận trên IEC Webstore vì trang ISO trả HTTP 403 khi truy cập. (3) Tài liệu CVAT mô tả tự động gán nhãn, threshold và ROI; tham khảo cho human-review/ROI có thể cải tiến, CVAT không được dùng trong PoC. Cả ba URL và ngày xem 2026-11-14 được ghi ở References.
-- Sơ đồ data flow (input → process → rank/QC → review → decision → report): `images.csv + manifest.csv` → xác minh SHA-256 và đọc ảnh → tính log Laplacian sharpness, brightness trung bình, tỷ lệ pixel tối và bão hòa → chuẩn hóa theo median/MAD của split dev theo `camera_id + light` (fallback thống kê dev toàn cục nếu nhóm có dưới 3 ảnh) → cộng các anomaly dương đã clip để tạo score → chọn top-20 → contact sheet/reviewer CSV → HOLD bảo thủ → report. Review CSV hiện được xuất riêng; code chưa áp override vào prediction hoặc audit log.
+- Sơ đồ data flow (input → process → rank/QC → review → decision → report): `images.csv + manifest.csv` → xác minh SHA-256 và đọc ảnh → tính log Laplacian sharpness, brightness trung bình, tỷ lệ pixel tối và bão hòa → chuẩn hóa theo median/MAD của split dev theo `camera_id + light` (fallback thống kê dev toàn cục nếu nhóm có dưới 3 ảnh) → cộng các anomaly dương đã clip để tạo score → chọn top-20 → contact sheet/reviewer CSV → audit quyết định review → HOLD bảo thủ → report. Pipeline ghi quyết định reviewer vào audit log nhưng chưa áp override vào prediction.
 - Thành phần offline (model/weights + checksum + license nếu có): Không dùng pretrained model/weights, API hoặc network. Dùng NumPy, Pandas, Pillow và SciPy đã có trong môi trường; ảnh synthetic CC0-1.0, checksum input được kiểm bằng manifest.
 - Trade-offs đã cân nhắc: Heuristic nhiều feature dễ chạy offline và giải thích được hơn model, đồng thời chuẩn hóa camera/light để giảm báo nhầm do quang học/điều kiện sáng. Đổi lại, feature toàn ảnh không định vị ROI, tỷ lệ saturated không mô tả đầy đủ glare cục bộ, chưa có feature JPEG blockiness riêng, và metadata sai có thể làm lệch chuẩn hóa. Không dùng nhãn eval để hiệu chỉnh.
 
 ## 04 · Baseline vs PoC
 
 - Baseline (mô tả, version/config, commit): Baseline đã chạy là `src.examples.random_baseline` (random score có seed), T02, offline, seed 42, 96 ảnh, B=20; output `out/baseline/ranked_review.csv`, runtime 0.1159 s, Python 3.15.2. Đây là wiring baseline của repo, **khác baseline Laplacian ngưỡng đơn được mô tả trong mục 4 của T02.md**; cần xác nhận với giảng viên baseline nào phải dùng. `run_info.json` ghi HEAD `b0ce8bf`, nhưng không phải commit chứa các thay đổi PoC đang ở worktree.
-- PoC (mô tả, version/config, commit): `src.pipeline` — heuristic blur/dark/glare với chuẩn hóa robust từ dev theo camera/light; offline, seed 42, config `configs/lab.yaml`, 96 ảnh, B=20. Output `out/poc/ranked_review.csv`; runtime 0.5768 s, Python 3.12.10. Thay đổi code chưa commit; SHA trong `run_info.json` (`b0ce8bf`) chỉ là HEAD tại lúc chạy, không đóng gói các thay đổi chưa commit.
+- PoC (mô tả, version/config, commit): `src.pipeline` — heuristic blur/dark/glare với chuẩn hóa robust từ dev theo camera/light; offline, seed 42, config `configs/lab.yaml`, 96 ảnh, B=20. Output `out/poc/ranked_review.csv`; runtime 0.4872 s, Python 3.12.10. PoC và audit review được chạy từ commit `d4f4b72d3d422b8bf914981bc0f2b26a6bf3ed5a`.
 - Cùng budget / cùng heldout / cùng seed: xác nhận cùng fixture pool (96 ảnh), B=20, seed 42 và cùng CPU. Chưa xác nhận được metric trên cùng heldout vì GT không có. Runtime không so sánh tuyệt đối được vì baseline chạy Python 3.15.2 còn PoC Python 3.12.10.
 
 **Bảng 1 · Baseline vs PoC & hard slices** — dán output của
@@ -57,7 +57,7 @@
 | Primary: Defect Recall@B (tỷ lệ)     | Chưa có — GT chưa được cấp                                             | Chưa có — GT chưa được cấp                                             | Không tính Δ; higher is better                                    |
 | Hard-slice: False alarm theo `light` | Chưa có — GT chưa được cấp                                             | Chưa có — GT chưa được cấp                                             | Không tính; eval có metadata day N=20, dusk N=4, night N=16       |
 | Review@B / miss / FP                 | Reviewer đã ghi 20/20 quyết định `reject` và 20 ghi chú; không phải GT | Reviewer đã ghi 20/20 quyết định `reject` và 20 ghi chú; không phải GT | Miss/FP chưa xác định; B=20                                       |
-| Runtime / 100 items                  | 0.1207 s/100 (Python 3.15.2)                                           | 0.6008 s/100 (Python 3.12.10)                                          | Cùng CPU, khác Python; chỉ tham khảo, chưa phải so sánh kiểm soát |
+| Runtime / 100 items                  | 0.1207 s/100 (Python 3.15.2)                                           | 0.5075 s/100 (Python 3.12.10)                                          | Cùng CPU, khác Python; chỉ tham khảo, chưa phải so sánh kiểm soát |
 
 ## 05 · Evaluation protocol
 
@@ -76,12 +76,12 @@
 
 - Failure case 1 (ảnh/metadata + root cause): Ghi nhận review thủ công, chưa xác nhận với GT: `img_13_3` (rank 1, score 8.0, night) được reviewer mô tả rất mờ/tối và không thể nhận diện phương tiện. Đây là hard case blur+dark; score cao vì các feature toàn ảnh cùng lệch dev. Chưa thể kết luận đây là true positive hay false alarm nếu thiếu nhãn.
 - Failure case 2: Ghi nhận review thủ công, chưa xác nhận với GT: `img_17_2` (rank 13, score 5.546786, day) được mô tả có glare trắng che một vùng đường/tòa nhà và blur. Điểm yếu cần kiểm tra là glare cục bộ có thể bị loãng trong thống kê toàn ảnh; ảnh này vẫn được đưa vào queue, không chứng minh recall chung. Reviewer cũng ghi nhận lỗi hình học synthetic ở các ảnh khác (ví dụ người đi bộ chồng lên xe), nằm ngoài feature set hiện tại.
-- Latency / compute (máy, CPU, ms/item): Windows 11; Intel64 Family 6 Model 140 Stepping 1, Intel64 processor; baseline 0.1159 s/96 ảnh = 0.1207 s/100 ảnh (Python 3.15.2); PoC 0.5768 s/96 ảnh = 0.6008 s/100 ảnh (Python 3.12.10). Thời gian lấy từ `out/{baseline,poc}/run_info.json`; môi trường Python khác nhau nên so sánh chỉ tham khảo.
+- Latency / compute (máy, CPU, ms/item): Windows 11; Intel64 Family 6 Model 140 Stepping 1, Intel64 processor; baseline 0.1159 s/96 ảnh = 0.1207 s/100 ảnh (Python 3.15.2); PoC 0.4872 s/96 ảnh = 0.5075 s/100 ảnh (Python 3.12.10). Thời gian lấy từ `out/{baseline,poc}/run_info.json`; môi trường Python khác nhau nên so sánh chỉ tham khảo.
 
 ## 07 · Human & decision
 
 - Review queue (file, B, cách ưu tiên): `out/poc/review_queue.csv`, B=20, sắp xếp score giảm dần; contact sheet offline ở `out/poc/contact_sheet.html`. Reviewer `Nguyen Tuan Hung` đã xuất `out/poc/review_queue_reviewed.csv`: 20 dòng đều có quyết định `reject`, 20 ghi chú, không có override_value. Các quyết định này là review thủ công, không thay thế hidden GT.
-- Cách override + audit log (`out/audit_log.jsonl`): Chưa hoàn tất. File reviewed được tạo sau lần chạy PoC; pipeline hiện chỉ đọc quyết định nhưng phần áp override còn TODO. Không có `out/poc/audit_log.jsonl` ghi nhận review; decision log hiện có chỉ ghi HOLD ban đầu. Cần hoàn thiện/kiểm chứng audit trước khi khẳng định override đã được áp dụng.
+- Cách override + audit log (`out/poc/audit_log.jsonl`): Sau khi chạy lại PoC với `out/poc/review_queue_reviewed.csv`, pipeline đã ghi 20 sự kiện `review:reject` với reviewer, item, ghi chú và thời điểm review. Bản evidence được lưu thêm tại `reports/audit_log.jsonl`. Không có `override_value`; audit ghi nhận quyết định thủ công nhưng không áp dụng thay đổi vào score/prediction. `decision.json` vẫn là HOLD.
 - Decision policy + `reason_code` + owner: `out/poc/decision.json` ghi `HOLD`, `reason_code=POLICY_NOT_IMPLEMENTED`, owner `Nguyen Tuan Hung - reviewer`; không có metric snapshot hoặc evidence path.
 - Khi nào HOLD/REWORK thay vì tự động release: Hiện luôn HOLD vì chưa có policy và GT validation. Trong thiết kế tiếp theo, HOLD khi review/GT/decision owner chưa xác nhận; REWORK/recapture chỉ khi reviewer/domain owner kết luận ảnh không dùng được. Không tự động release từ heuristic hiện tại.
 
@@ -95,14 +95,14 @@ pytest -q
 ```
 
 - Output của `pytest -q`: `py -3.12 -m pytest -q` kết thúc exit code 0; các test cần ground truth ẩn được skip theo cấu hình repo. `py -3.12 -m pytest -q tests/test_pipeline_t02.py tests/test_cli.py` đạt 8 passed / 2 skipped.
-- Máy / CPU / OS / Python: Intel64 Family 6 Model 140 Stepping 1 · Windows 11 · PoC Python 3.12.10 (baseline run ghi Python 3.15.2) · git sha: `b0ce8bfd972315448aace86185c1a3e075754b93` là HEAD được ghi trong run info; worktree có thay đổi chưa commit nên SHA này không đại diện đầy đủ cho PoC hiện tại.
+- Máy / CPU / OS / Python: Intel64 Family 6 Model 140 Stepping 1 · Windows 11 · PoC Python 3.12.10 (baseline run ghi Python 3.15.2) · run info của lượt PoC cuối ghi SHA `d4f4b72`, commit chứa code audit review.
 
 ## 09 · Limitations & ethics
 
 - Rủi ro pháp lý / PII / license: Fixture manifest ghi synthetic, CC0-1.0; không dùng data/real hoặc model pretrained. Không xác nhận được license của dữ liệu ngoài vì không có dữ liệu ngoài. Không đưa kết luận về PII/tuân thủ pháp lý cho dữ liệu vận hành từ kết quả PoC này.
-- Điều chưa biết; false alarms; nếu scale 10× thì sao: Chưa biết recall/precision, số miss/FP và tỷ lệ lỗi từng slice vì thiếu GT. Reviewer thấy các vấn đề tối/mờ, glare, lỗi hình học synthetic; đây là quan sát, không phải nhãn evaluator. Ngoại suy tuyến tính từ 0.5768 s/96 ảnh cho 960 ảnh khoảng 5.768 s trên cùng môi trường là ước tính thô, chưa benchmark 10×; I/O và môi trường có thể làm thay đổi thời gian.
+- Điều chưa biết; false alarms; nếu scale 10× thì sao: Chưa biết recall/precision, số miss/FP và tỷ lệ lỗi từng slice vì thiếu GT. Reviewer thấy các vấn đề tối/mờ, glare, lỗi hình học synthetic; đây là quan sát, không phải nhãn evaluator. Ngoại suy tuyến tính từ 0.4872 s/96 ảnh cho 960 ảnh khoảng 4.872 s trên cùng môi trường là ước tính thô, chưa benchmark 10×; I/O và môi trường có thể làm thay đổi thời gian.
 - Không tuyên bố "đạt GDPR / luật Việt Nam" từ checklist tự động; giả định cần DPO/legal xác nhận: Không có kết luận tuân thủ nào được đưa ra. Nếu thay fixture bằng ảnh thật có người/biển số, cần xác nhận căn cứ xử lý, mục đích, quyền truy cập, thời hạn lưu/xóa, license và phê duyệt DPO/legal trước khi chạy/chia sẻ.
-- Kế hoạch cải tiến: (1) lấy hidden GT và chạy baseline/PoC cùng protocol; (2) xác nhận baseline chính thức với giảng viên do tài liệu T02 và target mẫu khác nhau; (3) thêm kiểm tra glare cục bộ/ROI và JPEG blockiness; (4) kiểm tra metadata light sai; (5) hoàn thiện review override + append-only audit log; (6) báo cáo CI bootstrap theo cảnh và thêm tests cho edge cases; (7) tạo commit/tag sau khi chủ bài xác nhận.
+- Kế hoạch cải tiến: (1) lấy hidden GT và chạy baseline/PoC cùng protocol; (2) xác nhận baseline chính thức với giảng viên do tài liệu T02 và target mẫu khác nhau; (3) thêm kiểm tra glare cục bộ/ROI và JPEG blockiness; (4) kiểm tra metadata light sai; (5) hoàn thiện policy áp override; audit log hiện đã ghi nhận các quyết định review; (6) báo cáo CI bootstrap theo cảnh và thêm tests cho edge cases.
 
 ## 10 · Team contribution
 
@@ -110,9 +110,9 @@ pytest -q
 
 | Học viên | Git author/email                                       | Module / vai trò                                | Commit SHA / diff chứng minh                                                                                                                     | Trình bày?    |
 | -------- | ------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
-| Nguyen Tuan Hung | `hungnguyen67 <hungnn91296@gmail.com>` (Git author trùng owner của remote `origin`, phù hợp với owner trong `configs/lab.yaml`) | Làm cá nhân; config, reviewer, PoC (có trợ giúp AI), kiểm thử và báo cáo | Commit triển khai T02: `c12d483e7bcc3e7852dfa1fe9540eaac0db80128` (`Lab 06`); báo cáo/metadata nộp được cập nhật ở commit hoàn tất | Không |
+| Nguyen Tuan Hung | `hungnguyen67 <hungnn91296@gmail.com>` (Git author trùng owner của remote `origin`, phù hợp với owner trong `configs/lab.yaml`) | Làm cá nhân; config, reviewer, PoC (có trợ giúp AI), kiểm thử và báo cáo | Commit triển khai T02: `c12d483e7bcc3e7852dfa1fe9540eaac0db80128`; commit audit review: `d4f4b72d3d422b8bf914981bc0f2b26a6bf3ed5a` | Không |
 
-Ghi chú minh bạch: Git author `hungnguyen67 <hungnn91296@gmail.com>` khớp owner của remote `origin` và nhất quán với `Nguyen Tuan Hung` trong cấu hình bài. `git shortlog` còn có author khác trong lịch sử repository; không gán các commit đó cho cá nhân. SHA `b0ce8bf` trong `run_info.json` là HEAD tại thời điểm chạy, trước commit triển khai T02 `c12d483`; SHA này không đại diện cho code PoC hiện tại.
+Ghi chú minh bạch: Git author `hungnguyen67 <hungnn91296@gmail.com>` khớp owner của remote `origin` và nhất quán với `Nguyen Tuan Hung` trong cấu hình bài. `git shortlog` còn có author khác trong lịch sử repository; không gán các commit đó cho cá nhân. Baseline `run_info.json` ghi SHA `b0ce8bf`; lượt PoC cuối ghi `d4f4b72`, commit chứa phần ghi audit review.
 
 ## 11 · References
 
