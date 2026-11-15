@@ -159,16 +159,29 @@ def rank(ctx: RunContext, scored: pd.DataFrame) -> pd.DataFrame:
 
 # ---------------------------------------------------------------- 04 review
 def review(ctx: RunContext, scored: pd.DataFrame, queue: pd.DataFrame) -> pd.DataFrame:
-    """If a reviewed queue exists (out/review_queue_reviewed.csv), apply it. Otherwise pass through.
-
-    TODO: decide what an `edit` / `reject` means for your track and apply it
-    (e.g. via common.review.apply_overrides), logging every change to ctx.audit.
-    """
+    """Audit reviewed decisions; T02 does not yet translate them into score overrides."""
     reviewed_path = ctx.output_dir / "review_queue_reviewed.csv"
     if reviewed_path.exists():
         reviewed = load_review_decisions(reviewed_path)
         ctx.stats["n_reviewed"] = len(reviewed)
-        # TODO: apply overrides
+        if len(reviewed):
+            audit = ctx.audit
+            if audit is None:
+                raise RuntimeError("review decisions were provided but no audit log is configured")
+            for row in reviewed.itertuples(index=False):
+                audit.log(
+                    actor=row.reviewer,
+                    action=f"review:{row.reviewer_decision}",
+                    item_id=row.item_id,
+                    after={
+                        "reviewer_decision": row.reviewer_decision,
+                        "override_value": row.override_value,
+                    },
+                    reason=row.review_note,
+                    track=ctx.track,
+                    run_name=ctx.run_name,
+                    reviewed_at=row.reviewed_at,
+                )
     return scored
 
 
