@@ -12,8 +12,8 @@
 | Challenge                  | T02 · Raw QC Triage — xếp hạng ảnh mờ, lóa, thiếu sáng hoặc có vấn đề chất lượng để người review xử lý                            |
 | Thành viên (5–6) + vai trò | Cá nhân: Nguyen Tuan Hung (owner trong cấu hình: `Nguyen Tuan Hung - reviewer`), kiêm cấu hình, PoC, kiểm thử, review và báo cáo. |
 | Git URL                    | https://github.com/hungnguyen67/K5-L2A-DAY06-NguyenTuanHung-2A202603199-DataGovernanceAndPrivacy                                  |
-| Tag `demo-180m` (commit)   | Chưa tạo (không có tag trong repository tại thời điểm kiểm tra)                                                                   |
-| Tag `final-24h` (commit)   | Chưa tạo (không có tag trong repository tại thời điểm kiểm tra)                                                                   |
+| Tag `demo-180m` (commit)   | Annotated tag trên commit nộp cuối; cùng trỏ vào commit với `final-24h`                                                            |
+| Tag `final-24h` (commit)   | Annotated tag trên commit nộp cuối; cùng trỏ vào commit với `demo-180m`                                                            |
 | Deadline (giờ VN)          | Chưa được cung cấp                                                                                                                |
 
 ## 01 · Problem statement
@@ -110,9 +110,9 @@ pytest -q
 
 | Học viên | Git author/email                                       | Module / vai trò                                | Commit SHA / diff chứng minh                                                                                                                     | Trình bày?    |
 | -------- | ------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- |
-| Nguyen Tuan Hung | `hungnguyen67 <hungnn91296@gmail.com>` (Git author trùng owner của remote `origin`, phù hợp với owner trong `configs/lab.yaml`) | Làm cá nhân; config, reviewer, PoC (có trợ giúp AI), kiểm thử và báo cáo | Các thay đổi hiện còn uncommitted: `configs/lab.yaml`, `src/pipeline.py`, `tests/test_pipeline_t02.py`, `tests/test_cli.py`; chưa có commit SHA cho các thay đổi này | Không |
+| Nguyen Tuan Hung | `hungnguyen67 <hungnn91296@gmail.com>` (Git author trùng owner của remote `origin`, phù hợp với owner trong `configs/lab.yaml`) | Làm cá nhân; config, reviewer, PoC (có trợ giúp AI), kiểm thử và báo cáo | Commit triển khai T02: `c12d483e7bcc3e7852dfa1fe9540eaac0db80128` (`Lab 06`); báo cáo/metadata nộp được cập nhật ở commit hoàn tất | Không |
 
-Ghi chú minh bạch: Git author `hungnguyen67 <hungnn91296@gmail.com>` khớp owner của remote `origin` và nhất quán với `Nguyen Tuan Hung` trong cấu hình bài. `git shortlog` còn có author khác trong lịch sử repository; không gán các commit đó cho cá nhân. SHA `b0ce8bf` trong `run_info.json` là HEAD trước khi đưa các thay đổi đang có trong worktree vào commit, không phải bằng chứng commit cho PoC hiện tại. Các thay đổi PoC cần được commit để có SHA riêng.
+Ghi chú minh bạch: Git author `hungnguyen67 <hungnn91296@gmail.com>` khớp owner của remote `origin` và nhất quán với `Nguyen Tuan Hung` trong cấu hình bài. `git shortlog` còn có author khác trong lịch sử repository; không gán các commit đó cho cá nhân. SHA `b0ce8bf` trong `run_info.json` là HEAD tại thời điểm chạy, trước commit triển khai T02 `c12d483`; SHA này không đại diện cho code PoC hiện tại.
 
 ## 11 · References
 
